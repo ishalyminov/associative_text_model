@@ -1,0 +1,9 @@
+people 2
+faith 5
+really 3
+strong 3
+take 2
+kind 2
+say 3
+exist 3
+suppose 2
