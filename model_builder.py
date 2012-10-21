@@ -5,7 +5,14 @@ import nltk.corpus
 import nltk.tokenize
 import link_lexemes
 
-STOP_SET = nltk.corpus.stopwords.words('english')
+DEFAULT_LANGUAGE = 'english'
+
+# calculating critical frequency for arbitrarily built frequency dictionary
+# (may be raw frequency as well as assotiative power)
+def calculate_critical_frequency(in_freq_dictionary):
+    distinct_frequencies = set(in_freq_dictionary.values())
+    max_rank = len(distinct_frequencies)
+    return 1.0 + 0.5 * max_rank
 
 # returns a list of sentences, each one being a list of words, free of punctuation marks
 def tokenize_sentences(in_raw_text):
@@ -19,10 +26,11 @@ def tokenize_sentences(in_raw_text):
         punct_free_sentences.append([word.lower() for word in tokens if re.findall('\w+', word)])
     return punct_free_sentences
 
-def stop(in_text, in_filtering_set=STOP_SET):
+def stop(in_text, in_language = DEFAULT_LANGUAGE):
+    filtering_set = nltk.corpus.stopwords.words(in_language)
     result = []
     for sentence in in_text:
-        sentence_filtered = [word for word in sentence if word not in in_filtering_set]
+        sentence_filtered = [word for word in sentence if word not in filtering_set]
         if len(sentence_filtered):
             result.append(sentence_filtered)
     return result
