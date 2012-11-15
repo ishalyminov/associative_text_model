@@ -47,7 +47,7 @@ def add_merged_lexemes_pair(in_const_phrases, in_lex_a, in_lex_b):
     for const_phrase in in_const_phrases:
         # adding both lexemes to the phrase keeping it sorted and duplicate-free
         if in_lex_a in const_phrase or in_lex_b in const_phrase:
-            const_phrase[:] = sorted(set(const_phrase.extend([in_lex_a, in_lex_b])))
+            const_phrase[:] = sorted(set(const_phrase + [in_lex_a, in_lex_b]))
             return
     in_const_phrases.append(sorted([in_lex_a, in_lex_b]))
 

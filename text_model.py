@@ -3,10 +3,9 @@ import collections
 import copy
 import nltk.tokenize
 
-import link_lexemes
 import common
-
-DEFAULT_LANGUAGE = 'english'
+import link_lexemes
+import const_phrase
 
 # calculating critical frequency for arbitrarily built frequency dictionary
 # (may be raw frequency as well as assotiative power)
@@ -87,7 +86,7 @@ def dump_lexemes(in_text_model):
             sorted(nondominant_lexemes.items(), key = operator.itemgetter(1), reverse = True))
 
 class AssociativeModel(object):
-    def __init__(self, in_sentences, in_language = DEFAULT_LANGUAGE):
+    def __init__(self, in_sentences, in_language = common.DEFAULT_LANGUAGE):
         self.language = in_language
         self.sentences = copy.deepcopy(in_sentences)
         '''
@@ -110,9 +109,11 @@ class AssociativeModel(object):
     # extracting full link set
     def initial_preprocessing(self, in_sentences):
         # just words in the right order
-        self.fls = link_lexemes.extract_full_link_set(in_sentences, self.language keep_positions = True)
-        self.pos_to_lex_mapping = {record[1]:record[0] for record in fls}
-        self.lex_to_pos_mapping = {record[0]:record[1] for record in fls}
+        self.fls = link_lexemes.extract_full_link_set(in_sentences,
+                                                      self.language,
+                                                      keep_positions = True)
+        self.pos_to_lex_mapping = {record[1]:record[0] for record in self.fls}
+        self.lex_to_pos_mapping = {record[0]:record[1] for record in self.fls}
 
         # representing sentences as lists of FLS indices, not words themselves
         self.indexed_text = self.build_text_index(in_sentences, self.lex_to_pos_mapping)
@@ -132,7 +133,7 @@ class AssociativeModel(object):
         target_area = set(self.existence_areas[in_id])
         for lexeme_id in self.existence_areas.keys():
             if not lexeme_id == in_id:
-                other_area = set(self.existence_matrices[lexeme_id])
+                other_area = set(self.existence_areas[lexeme_id])
                 if not len(target_area.difference(other_area)) \
                     and len(other_area.difference(target_area)):
                     return True
@@ -146,7 +147,7 @@ class AssociativeModel(object):
 
     def merge_const_phrases(self, in_existence_areas):
         # detecting constant phrases
-        phrases_merged = const_phrase.extract_const_phrases(in_existence_areas)
+        phrases_merged = const_phrase.extract_constant_phrases(in_existence_areas)
         lexemes_to_remove = set([])
         for phrase in phrases_merged:
             lexemes_to_remove |= set(phrase[1:])
@@ -155,14 +156,14 @@ class AssociativeModel(object):
 
     def extract_nonattributive_lexemes(self, in_existence_areas):
         return {lexeme_id: area for (lexeme_id, area) in in_existence_areas.iteritems() \
-                if not is_attributive_lexeme(lexeme_id)}
+                if not self.is_attributive_lexeme(lexeme_id)}
 
     '''
         returns a mapping: 'lexeme ID' -> [sentence ids]
     '''
     def calculate_existence_areas(self, in_indexed_text, in_pos_to_lex_mapping):
         existence_areas = collections.defaultdict(lambda: set([]))
-        for index in len(in_indexed_text):
+        for index in xrange(len(in_indexed_text)):
             for word_id in in_indexed_text[index]:
                 if word_id in in_pos_to_lex_mapping:
                     existence_areas[word_id].add(index)
@@ -183,7 +184,7 @@ class AssociativeModel(object):
         for lexeme_id in in_existence_areas:
             # we do not count generative sentence while computing associative power
             existence_area = in_existence_areas[lexeme_id][1:]
-            result[lexeme_id] = sum([len(sentence) -1 for sentence in existence_area])
+            result[lexeme_id] = len(existence_area) - 1
         return result
 
     def remove_nondominants(self):
