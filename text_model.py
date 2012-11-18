@@ -61,29 +61,14 @@ def refresh_text_index(in_lexemes, in_text_index):
         text_dict = {id: words for (id, words) in new_text.iteritems() if len(words)}
         return text_dict
 
-def lexeme_associative_power(in_lexeme_id, in_text_index):
-    # here area does not include the generative sentence (which the first appearance is in)
-    adjacent_lexemes = set([])
-    for sentence_id in in_text_index:
-        if in_lexeme_id in in_text_index[sentence_id]:
-            adjacent_lexemes.update(set(in_text_index[sentence_id]))
-    # removing from the result the id of the target itself
-    adjacent_lexemes.remove(in_lexeme_id)
-    return len(adjacent_lexemes)
-
 # dumps two lists of dominant and nondominant lexemes with their associative powers
-def dump_lexemes(in_text_model):
-    dominant_lexemes = {}
-    nondominant_lexemes = {}
-    for position in in_text_model.existence_areas.keys():
-        lexeme = in_text_model.pos_to_lex_mapping[position]
-        power = in_text_model.associative_power_dict[position]
-        if power > in_text_model.critical_associative_power:
-            dominant_lexemes[lexeme] = power
-        else:
-            nondominant_lexemes[lexeme] = power
-    return (sorted(dominant_lexemes.items(), key = operator.itemgetter(1), reverse = True),
-            sorted(nondominant_lexemes.items(), key = operator.itemgetter(1), reverse = True))
+def get_freq_dict(in_text_model):
+    phrases = {}
+    for phrase in in_text_model.existence_areas.keys():
+        phrase_string = in_text_model.get_phrase(phrase)
+        power = in_text_model.get_phrase_weight(phrase)
+        phrases[phrase_string] = power
+    return phrases
 
 class AssociativeModel(object):
     def __init__(self, in_sentences, in_language = common.DEFAULT_LANGUAGE):
@@ -96,6 +81,7 @@ class AssociativeModel(object):
             self.lex_to_pos_mapping for words from fls: {'word' -> start_position}
             self.indexed_text: sentences containing positions of fls' lexemes held inside of them
         '''
+        self.build_lexicon(self.sentences)
         self.initial_preprocessing(self.sentences)
 
         self.existence_areas = self.calculate_existence_areas(self.indexed_text,
@@ -117,6 +103,12 @@ class AssociativeModel(object):
 
         # representing sentences as lists of FLS indices, not words themselves
         self.indexed_text = self.build_text_index(in_sentences, self.lex_to_pos_mapping)
+
+    def build_lexicon(self, in_sentences):
+        unique_words = set([])
+        for sentence in in_sentences:
+            unique_words |= set(sentence)
+        self.lexicon = sorted(unique_words)
 
     def build_text_index(self, in_sentences, in_mapping):
         indexed_sentences = []
@@ -149,10 +141,17 @@ class AssociativeModel(object):
         # detecting constant phrases
         phrases_merged = const_phrase.extract_constant_phrases(in_existence_areas)
         lexemes_to_remove = set([])
+        replace_map = {}
         for phrase in phrases_merged:
             lexemes_to_remove |= set(phrase[1:])
-        return {lex_id: area for (lex_id, area) in in_existence_areas.iteritems() \
-                if lex_id not in lexemes_to_remove}
+            replace_map[phrase[0]] = phrase
+        merged_existence_areas = {}
+        for (lex_id, area) in in_existence_areas.iteritems():
+            if lex_id in replace_map:
+                merged_existence_areas[tuple(replace_map[lex_id])] = area
+            elif not lex_id in lexemes_to_remove:
+                merged_existence_areas[tuple([lex_id])] = area
+        return merged_existence_areas
 
     def extract_nonattributive_lexemes(self, in_existence_areas):
         return {lexeme_id: area for (lexeme_id, area) in in_existence_areas.iteritems() \
@@ -172,9 +171,6 @@ class AssociativeModel(object):
             for (word_id, sent_ids) in sorted(existence_areas.iteritems())}
         return result_areas
 
-    def refresh_text_index(self):
-        self.indexed_text = refresh_text_index(self.active_lexemes, self.indexed_text)
-
     '''
         Returns a map:
         {lexeme_id -> # unique adjacent lexemes within all the sentences except for the generative one}
@@ -183,22 +179,9 @@ class AssociativeModel(object):
         result = {}
         for lexeme_id in in_existence_areas:
             # we do not count generative sentence while computing associative power
-            existence_area = in_existence_areas[lexeme_id][1:]
-            result[lexeme_id] = len(existence_area) - 1
+            existence_area = in_existence_areas[lexeme_id]
+            result[lexeme_id] = len(existence_area[1:])
         return result
-
-    def remove_nondominants(self):
-        dominant_ids = set(extract_dominants(self.indexed_text, self.active_lexemes))
-        nondominant_ids = set(self.active_lexemes.keys()).difference(dominant_ids)
-        for id in nondominant_ids:
-            self.active_lexemes.pop(id)
-        
-        for id in self.sentences:
-            self.sentences[id][:] = [word_id for word_id in self.sentences[id] \
-                if word_id in self.active_lexemes]
-
-        self.refresh_text_index()
-        self.calculate_existence_areas()
 
     def text_as_string(self):
         result_text = []
@@ -207,6 +190,12 @@ class AssociativeModel(object):
                 result_text.append(self.active_lexemes[word_id])
             result_text.append('.')
         return '\t'.join(result_text)
+
+    def get_phrase(self, in_phrase):
+        return ' '.join([self.pos_to_lex_mapping[lex_id] for lex_id in in_phrase])
+
+    def get_phrase_weight(self, in_phrase):
+        return sum([self.associative_power_dict[lex_id] for lex_id in in_phrase])
 
 def test():
     lexemes = [['mom', 'dad', 'dog', 'cat']]
